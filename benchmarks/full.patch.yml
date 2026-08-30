@@ -1,0 +1,19 @@
+- id: tool-fs
+  config:
+    readLimit: 2000
+    readMaxLineLength: 3000000
+    readMaxBytes: 3000000
+    readStreamMinSize: 1
+
+- id: tool-result-pruner
+  disabled: true
+
+- id: compaction-basic
+  disabled: true
+
+- insert:
+    - id: benchmark-compaction
+      name: dsh-token-optimizer/engine
+      config:
+        thresholdRatio: 0.625
+        retainRatio: 0.16

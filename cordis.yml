@@ -1,0 +1,19 @@
+# Standalone root composition: use only where ctx.compaction is NOT isolated
+# by an agent preset. For the shipped Web presets, use cordis.patch.yml plus
+# preset-cordis.yml instead.
+- id: compaction-basic
+  name: '@deepseek-ai/dsh-compaction-basic'
+  disabled: true
+
+- id: dsh-token-optimizer
+  name: dsh-token-optimizer
+  config:
+    compaction: true
+    thresholdRatio: 0.625
+    retainRatio: 0.16
+    smallResultChars: 1200
+    largeResultChars: 12000
+    previewChars: 1000
+    mediumHeadChars: 4096
+    mediumTailChars: 1024
+    archiveRoot: !!js dshHomePath('token-optimizer-spill')

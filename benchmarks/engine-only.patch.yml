@@ -1,0 +1,29 @@
+- id: tool-fs
+  config:
+    readLimit: 2000
+    readMaxLineLength: 3000000
+    readMaxBytes: 3000000
+    readStreamMinSize: 1
+
+- id: tool-result-pruner
+  disabled: true
+
+- id: dsh-token-optimizer
+  config:
+    compaction: false
+    smallResultChars: 3000000
+    largeResultChars: 4000000
+    previewChars: 1000
+    mediumHeadChars: 4096
+    mediumTailChars: 1024
+    archiveRoot: !!js dshHomePath('token-optimizer-spill')
+
+- id: compaction-basic
+  disabled: true
+
+- insert:
+    - id: benchmark-compaction
+      name: dsh-token-optimizer/engine
+      config:
+        thresholdRatio: 0.625
+        retainRatio: 0.16

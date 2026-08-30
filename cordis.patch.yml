@@ -1,0 +1,13 @@
+# Root-level result policy, retrieval tool, session projection, and Web panel.
+# Agent presets own the isolated ctx.compaction provider; see preset-cordis.yml.
+- insert:
+    - id: dsh-token-optimizer
+      name: dsh-token-optimizer
+      config:
+        compaction: false
+        smallResultChars: 1200
+        largeResultChars: 12000
+        previewChars: 1000
+        mediumHeadChars: 4096
+        mediumTailChars: 1024
+        archiveRoot: !!js dshHomePath('token-optimizer-spill')

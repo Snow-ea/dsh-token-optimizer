@@ -1,0 +1,9 @@
+- id: tool-fs
+  config:
+    readLimit: 2000
+    readMaxLineLength: 3000000
+    readMaxBytes: 3000000
+    readStreamMinSize: 1
+
+- id: dsh-token-optimizer
+  disabled: true

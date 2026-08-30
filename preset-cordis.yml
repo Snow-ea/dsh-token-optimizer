@@ -1,0 +1,13 @@
+# Replace these rows inside a USER-COPIED preset's existing `compaction` group.
+# Do not add them at the profile root: shipped presets isolate ctx.compaction.
+- id: compaction-basic
+  name: dsh-token-optimizer/engine
+  config:
+    thresholdRatio: 0.625
+    retainRatio: 0.16
+
+# Keep command-compact unchanged. Disable the built-in pruner because it does
+# not write complete replaced content into dsh-token-optimizer's archive.
+- id: tool-result-pruner
+  name: '@deepseek-ai/dsh-compaction-tool-result-pruner'
+  disabled: true
