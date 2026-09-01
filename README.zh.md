@@ -10,9 +10,9 @@
 
 | 文件 | 用途 |
 | --- | --- |
-| `cordis.yml` | 没有 agent preset isolate 的独立 root composition 示例。 |
-| `cordis.patch.yml` | Web profile bundle patch：root 结果策略、retrieve、projection 与 Client dashboard。 |
-| `preset-cordis.yml` | 复制出的用户 preset 中替换 isolate compaction provider 的行片段。 |
+| `cordis.yml` | host 拥有 `ctx.compaction` 时使用的独立 root composition 示例。 |
+| `cordis.patch.yml` | Web profile bundle patch：root 结果策略、62.5% 跨 preset 自动 compaction、retrieve、projection 与 Client dashboard。 |
+| `preset-cordis.yml` | 可选的用户 preset 片段，用于替换某个 isolate compaction provider。 |
 
 ## 安全网
 
@@ -112,7 +112,7 @@ Retrieve the complete original with retrieve_spill(...).
 
 最后一点使摘要请求成为已预热会话前缀的扩展，而非重建 system prompt/tools schema，从而尽可能复用 provider KV cache。
 
-`dsh-token-optimizer/engine` 在一个 Cordis realm 中必须是唯一的 `ctx.compaction` provider。不能与 stock `dsh-compaction-basic` 或提供同一服务的 dsh-headroom backend 并列加载。
+`dsh-token-optimizer/engine` 在同一个 Cordis realm 中必须是唯一的 `ctx.compaction` provider。安装 bundle 后，root engine 会跨 agent 监听 pressure/overflow 生命周期；Standard、PTC、创造模式中的隔离 stock engine 只作为 80% 的兜底，root engine 已在 62.5% 先完成压缩，因此不会重复压缩。若在同一个 preset realm 内手工替换 provider，仍不能与 stock `dsh-compaction-basic` 或提供同一服务的 dsh-headroom backend 并列加载。
 
 ## Dashboard
 
@@ -229,7 +229,7 @@ dsh plugin --profile web add dsh-token-optimizer
 
 `dsh plugin` 会在目标 profile 目录中转发给 pnpm，并识别包内的 `dsh.bundle.patch`，将 bundle 加入该 profile 的有序层列表。安装后需重启已有的 `dsh web` 进程。
 
-这一步启用可恢复工具结果压缩、`retrieve_spill`、projection 和 Web dashboard。62.5% compaction engine 不会自动进入 shipped preset 的 isolate；需要低阈值引擎时，继续按下方步骤复制用户 preset 并应用 [`preset-cordis.yml`](preset-cordis.yml)。不要直接修改 DSH 随附的 preset。
+这一步启用可恢复工具结果压缩、`retrieve_spill`、projection、Web dashboard，以及跨四个 shipped agent mode 生效的 62.5% 自动 compaction engine。无需复制或新建 preset，也不要修改 DSH 随附的 preset。
 
 从公开 Git 仓库也可安装，例如：
 
@@ -260,30 +260,21 @@ dsh plugin --profile web add --force "$env:TEMP\dsh-token-optimizer-<version>.tg
 dsh --profile web --dump-config
 ```
 
-Web root bundle 只注册结果策略、archive、`retrieve_spill`、projection 和 Client dashboard，并使用：
+Web root bundle 现在同时启用 root-level 62.5% engine：
 
 ```yaml
-compaction: false
+compaction: true
+thresholdRatio: 0.625
+retainRatio: 0.16
+auto: true
 archiveRoot: !!js dshHomePath('token-optimizer-spill')
 ```
 
-这是有意的。Web shipped presets 把 `ctx.compaction` 隔离在各自的 `compaction` group 内；root provider 不能替换该 realm。
+root engine 的 pressure/overflow listener 会接收四个内置模式的 agent 事件。Standard、PTC、创造模式仍保留各自 isolated stock engine，但 root engine 先在 62.5% 完成压缩，stock engine 只会在 root engine 没有完成时作为 80% 兜底；极简模式没有 compaction group，直接使用 root engine。因此下载后不需要创建任何新 preset。
 
-### 3. 复制用户 preset 并替换 engine
+如需在一个用户自定义 preset 内彻底替换 isolated `ctx.compaction` provider，仍可使用 [`preset-cordis.yml`](preset-cordis.yml)；这不是内置模式的必需步骤。为保持所有替换内容可恢复，使用该片段时仍要禁用 `tool-result-pruner`：新版 DSH 的内置 pruner 会永久替换 session surface，但不会写入本插件的外部 archive。不要编辑 DSH 随附的 preset。
 
-绝不编辑 shipped `standard`、`code` 或 `cordis` preset。当前已创建三个用户 preset：
-
-```text
-Token Optimizer Creator
-标准模式（Token Optimizer）
-PTC 模式（Token Optimizer）
-```
-
-它们分别从当前 shipped `cordis`、`standard` 和 `code` composition 复制而来。在各自的 `compaction` group 中，使用 [`preset-cordis.yml`](preset-cordis.yml) 将 stock `compaction-basic` 换成优化器引擎，并保留 `command-compact`。
-
-`tool-result-pruner` 必须保持 `disabled: true`：新版 DSH 的内置 pruner 会永久替换 session surface，但不会写入本插件的外部 archive，不能满足“所有被修剪内容均可取回”的保证。新 session 才会使用新 preset；运行中的 session 固定使用创建时的 preset。
-
-### 4. 重启现有 Web 进程
+### 3. 重启现有 Web 进程
 
 已占用 `127.0.0.1:3080` 的 Web 进程不会读取新 tarball。不要启动第二个服务；在原始 `dsh web` 终端按 `Ctrl+C`，确认端口释放后，在同一终端执行：
 
@@ -291,7 +282,7 @@ PTC 模式（Token Optimizer）
 dsh web
 ```
 
-刷新 `http://127.0.0.1:3080`，新建一个选择任一 `Token Optimizer` preset 的 session。Client HMR 只有 DSH checkout 中的 `pnpm run dev:web` 同时重建 browser bundle 时可用；普通本地包变更仍需要 build、pack、安装和重启。
+刷新 `http://127.0.0.1:3080`，新建一个选择任意内置模式的 session，即可直接体验全量 token 优化能力。原有 `Token Optimizer` 用户 preset 仍可继续使用；Client HMR 只有 DSH checkout 中的 `pnpm run dev:web` 同时重建 browser bundle 时可用，普通本地包变更仍需要 build、pack、安装和重启。
 
 ## 测试
 
@@ -299,7 +290,7 @@ dsh web
 pnpm run check
 ```
 
-当前 17 项测试覆盖：
+当前 18 项测试覆盖：
 
 - 小结果 Unicode 边界、ANSI/空白/重复行确定性压缩。
 - medium `4096/1024` 头尾保留。
@@ -316,14 +307,14 @@ pnpm run check
 2. 中等结果保留头尾，显示 `[line repeated xN]` 与 `SPILL_ID`。
 3. 大结果显示首尾 preview、明确的“trimmed, not lost”提示和 `retrieve_spill` 指引。
 4. 对同一 ID 重复调用 `retrieve_spill` 直到 `hasMore: false`，确认原文完全恢复。
-5. 用复制后的用户 preset 新建 session；pressure 超过 `62.5%` 时检查 compaction 计数，并执行 `/compact`。
+5. 用任一内置模式新建 session；pressure 超过 `62.5%` 时检查 compaction 计数，并执行 `/compact`。
 6. 观察后续请求是否继续复用原 system/tools schema 前缀和 dashboard cache hit rate。
 
 ## 与其他插件共存
 
 ### dsh-compaction-tool-result-pruner
 
-不要在任一 `Token Optimizer` preset 中启用它。它确实是 `toolResultPruner` companion service，而非 `ctx.compaction` provider，但新版 DSH 会把 pruned surface replacement 持久化，而它没有调用本插件的外部 archive。为保持完整可取回保证，三个优化器 preset 都保留该行但设置 `disabled: true`。
+root engine 不依赖该 pruner，四个内置模式无需修改 preset 即可使用本插件。若你仍使用 [`preset-cordis.yml`](preset-cordis.yml) 在某个用户 preset 内彻底替换 isolated engine，则不要启用它：它确实是 `toolResultPruner` companion service，而非 `ctx.compaction` provider，但新版 DSH 会把 pruned surface replacement 持久化，而它没有调用本插件的外部 archive。为保持完整可取回保证，用户 preset 中应将该行设置为 `disabled: true`。
 
 ### dsh-spill-policy
 

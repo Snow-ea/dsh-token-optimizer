@@ -1,10 +1,14 @@
-# Root-level result policy, retrieval tool, session projection, and Web panel.
-# Agent presets own the isolated ctx.compaction provider; see preset-cordis.yml.
+# Root-level result policy, retrieval tool, session projection, Web panel, and
+# cross-preset automatic compaction. The root engine observes every agent's
+# pressure event, so shipped preset isolation does not require a user copy.
 - insert:
     - id: dsh-token-optimizer
       name: dsh-token-optimizer
       config:
-        compaction: false
+        compaction: true
+        thresholdRatio: 0.625
+        retainRatio: 0.16
+        auto: true
         smallResultChars: 1200
         largeResultChars: 12000
         previewChars: 1000

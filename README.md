@@ -8,7 +8,7 @@ Deterministic, recoverable tool-result compression and cache-aware compaction fo
 
 - Compresses large successful text tool results before they repeatedly enter the model context.
 - Archives every lossy replacement and exposes `retrieve_spill` for exact, session-authorized recovery.
-- Provides an optional `BasicCompactionEngine` adapter with a 62.5% default threshold while preserving DSH's cache-aware replay behavior.
+- Provides a root-level `BasicCompactionEngine` adapter with a 62.5% default threshold while preserving DSH's cache-aware replay behavior across shipped agent modes.
 - Adds a Web conversation dashboard for projected context pressure and cumulative cache-hit metrics.
 
 ## Install
@@ -19,9 +19,9 @@ Install the public bundle into a DSH profile:
 dsh plugin --profile web add dsh-token-optimizer
 ```
 
-Restart the existing `dsh web` process after installation. The bundle enables recoverable tool-result compression, spill retrieval, projection, and the Web dashboard.
+Restart the existing `dsh web` process after installation. The bundle enables recoverable tool-result compression, spill retrieval, projection, the Web dashboard, and the 62.5% automatic compaction engine across all four shipped agent modes. No user preset copy is required.
 
-The optional 62.5% compaction engine belongs inside a user-copied agent preset because shipped presets isolate `ctx.compaction`. Do not edit shipped presets. See [README.zh.md](README.zh.md#creator-mode-加载) and [`preset-cordis.yml`](preset-cordis.yml) for the exact replacement rows.
+The root engine observes each agent's pressure and overflow lifecycle. In Standard, PTC, and Creator modes it runs before the isolated stock engine, so the surface is reduced at 62.5% and the stock 80% fallback has no second reduction to perform. Minimal mode has no preset compaction group and uses the root engine directly. The optional [`preset-cordis.yml`](preset-cordis.yml) fragment remains for deployments that deliberately want to replace a preset's isolated provider itself; do not edit shipped presets.
 
 ## Verify
 

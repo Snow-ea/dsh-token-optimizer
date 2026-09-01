@@ -25,6 +25,43 @@ test('engine entry defaults compaction pressure to 62.5 percent', async () => {
   await base.dispose()
 })
 
+test('root engine registers an automatic pressure listener', async () => {
+  const root = new Context()
+  const base = root.plugin({
+    apply(ctx) {
+      ctx.provide('llm', {})
+      ctx.provide('tokenMeter', {})
+      ctx.provide('sessions', {})
+    },
+  })
+  await base
+  const engineFiber = root.plugin(TokenOptimizerCompactionEngine)
+  await engineFiber
+
+  let calls = 0
+  const engine = root.compaction as TokenOptimizerCompactionEngine
+  engine.compactIfNeeded = async (_agent, trigger, _signal) => {
+    assert.equal(trigger, 'pressure')
+    calls += 1
+    return null
+  }
+  await root.waterfall(
+    'agent/pre-step',
+    {
+      agent: {} as never,
+      messages: [],
+      turn: 0,
+      step: 0,
+      signal: new AbortController().signal,
+    },
+    async () => ({ kind: 'enter', messages: [] }),
+  )
+
+  assert.equal(calls, 1)
+  await engineFiber.dispose()
+  await base.dispose()
+})
+
 test('policy startup is atomic when a compaction provider already exists', async () => {
   const root = new Context()
   const base = root.plugin({

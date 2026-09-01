@@ -1,6 +1,6 @@
-# Standalone root composition: use only where ctx.compaction is NOT isolated
-# by an agent preset. For the shipped Web presets, use cordis.patch.yml plus
-# preset-cordis.yml instead.
+# Standalone root composition: use when the host owns ctx.compaction. The Web
+# bundle patch uses the same root engine as a cross-preset automatic fallback;
+# preset-cordis.yml is only needed when a user preset must replace its isolate.
 - id: compaction-basic
   name: '@deepseek-ai/dsh-compaction-basic'
   disabled: true
@@ -11,6 +11,7 @@
     compaction: true
     thresholdRatio: 0.625
     retainRatio: 0.16
+    auto: true
     smallResultChars: 1200
     largeResultChars: 12000
     previewChars: 1000
