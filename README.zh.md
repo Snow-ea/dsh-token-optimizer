@@ -1,10 +1,10 @@
 # dsh-token-optimizer
 
-面向 DeepSeek Harness `0.1.1-rc.2` 的 Cordis 插件包，组合三类能力：
+面向 DeepSeek Harness `0.1.2-rc.1` 的 Cordis 插件包，组合三类能力：
 
-- `tools/post-execute` 上的确定性纯文本结果压缩。
-- 基于官方 `BasicCompactionEngine` 的低阈值、缓存复用 compaction adapter。
-- 可持久检索的 spill archive 与会话 token/caching dashboard。
+- `tools/post-execute` 上的确定性纯文本结果压缩，以及不改变 PTC 程序值的 `tools/ptc-dispatch-log` 持久日志压缩。
+- 基于官方 `BasicCompactionEngine` 的低阈值、缓存复用 compaction adapter，直接继承新版本的强类型 Session 与图片压力计量。
+- 可持久检索的 spill archive 与适配拆分后 Client UI contract 的会话 token/caching dashboard。
 
 源码位于 `src/`，构建产物位于 `lib/`。包包含三个组合文件：
 
@@ -73,7 +73,7 @@ Retrieve the complete original with retrieve_spill(...).
 
 ## 工具结果策略
 
-策略仅处理成功工具调用的纯 `text` block。失败结果、图片、tool-call 等混合内容、Code Mode nested dispatch、`retrieve_spill` 本身，以及下游 hook 已经显式 replacement 的 `content`/`value` 都原样通过。
+面向模型的策略仅处理成功根工具调用的纯 `text` block。失败结果、图片、tool-call 等混合内容、PTC nested dispatch 的程序值、`retrieve_spill` 本身，以及下游 hook 已经显式 replacement 的 `content`/`value` 都原样通过。PTC nested dispatch 只在新的 `tools/ptc-dispatch-log` waterfall 中压缩会话日志副本；`run_code` 程序收到的结构化值保持完整。
 
 ### 小结果
 
@@ -194,9 +194,20 @@ node benchmarks/summarize-session.mjs <session.jsonl.zstd> "BENCHMARK_DONE: HYDR
 
 重跑时应交错各组顺序并至少取三次中位数；若 Provider 给出不同 cache read / write 定价，应以其账单单价分别加权，而不是把 Prompt Token 直接等同于货币成本。
 
+## 版本兼容
+
+| dsh-token-optimizer | DeepSeek Harness | 状态 |
+| --- | --- | --- |
+| `0.1.9` | `0.1.1-rc.2` | 上一已发布稳定插件版本 |
+| `0.2.0` | `0.1.2-rc.1` | 当前正式插件版本 |
+
+`0.2.0` 不再依赖已退出新 Web 栈的 `@deepseek-ai/dsh-client-runtime`，Client dashboard 改用拆分后的 Conversation、Renderer 和 Session contract；projection 通过 `seq`、`eventAt()`、`snapshotEvents()` 驱动，不读取已移除的 `Session.events`；PTC nested dispatch 的完整程序值保持不变，只压缩 `tools/ptc-dispatch-log` 的持久副本。完整变更依据和验证矩阵见 [`docs/dsh-0.1.2-rc.1-compatibility.md`](docs/dsh-0.1.2-rc.1-compatibility.md)。
+
+上文基准仍是 `0.1.1-rc.2 + dsh-token-optimizer@0.1.8` 的历史实测数据；在 `0.2.0` 上重跑前，不把它表述为新版本结果。
+
 ## 构建
 
-`pnpm-workspace.yaml` 将本工作区开发图锁定到 `0.1.1-rc.2`，使类型检查针对当前 DSH 运行时协议。
+`pnpm-workspace.yaml` 将本工作区开发图锁定到 `0.1.2-rc.1`，并将 Cordis 锁定到 `4.0.2`，使类型检查针对当前 DSH RC 运行时协议。
 
 ```powershell
 # 在仓库根目录执行
@@ -209,7 +220,7 @@ pnpm run check
 build 顺序不可颠倒：
 
 1. `tsc` 输出 Host ESM、声明文件和普通 Client ESM。
-2. `scripts/build-client.mjs` 把 Client 入口生成 DSH web2 所需的 lazy-CJS `window.__ModuleLoader__.load(...)` bundle。
+2. `scripts/build-client.mjs` 把 Client 入口生成 DSH `0.1.2` Client Modules 所需的 lazy-CJS `window.__ModuleLoader__.load(...)` bundle。
 
 验证：
 
@@ -221,10 +232,10 @@ Get-Content .\lib\client.js -TotalCount 2
 
 ## 公开安装
 
-插件发布到 npm 后，普通用户可直接把 root bundle 安装到 Web profile：
+使用 DSH `0.1.2-rc.1` 的用户可把 `0.2.0` root bundle 安装到 Web profile：
 
 ```powershell
-dsh plugin --profile web add dsh-token-optimizer
+dsh plugin --profile web add dsh-token-optimizer@0.2.0
 ```
 
 `dsh plugin` 会在目标 profile 目录中转发给 pnpm，并识别包内的 `dsh.bundle.patch`，将 bundle 加入该 profile 的有序层列表。安装后需重启已有的 `dsh web` 进程。
@@ -239,7 +250,7 @@ dsh plugin --profile web add github:Snow-ea/dsh-token-optimizer
 
 仓库会提交 `lib/` 构建产物，因此该 Git 来源不依赖安装期 TypeScript 构建。面向普通用户仍优先推荐 npm 包，因为它有明确的 SemVer 版本和稳定 tarball 内容。若未来增加 `prepare` 脚本，pnpm 可能要求在 profile 的 `pnpm-workspace.yaml` 中明确允许该构建。
 
-## Creator mode 加载
+## 本地构建与加载
 
 ### 1. 构建并打包
 
@@ -282,7 +293,7 @@ root engine 的 pressure/overflow listener 会接收四个内置模式的 agent 
 dsh web
 ```
 
-刷新 `http://127.0.0.1:3080`，新建一个选择任意内置模式的 session，即可直接体验全量 token 优化能力。原有 `Token Optimizer` 用户 preset 仍可继续使用；Client HMR 只有 DSH checkout 中的 `pnpm run dev:web` 同时重建 browser bundle 时可用，普通本地包变更仍需要 build、pack、安装和重启。
+刷新 `http://127.0.0.1:3080`，新建一个选择任意内置模式的 session，即可直接体验全量 token 优化能力。插件不会自动修改已有用户 preset；从旧 DSH 版本复制的 `Token Optimizer` preset 切换到 `0.1.2-rc.1` 后应先按兼容性文档重新验证。Client HMR 只有 DSH checkout 中的 `pnpm run dev:web` 同时重建 browser bundle 时可用，普通本地包变更仍需要 build、pack、安装和重启。
 
 ## 测试
 
@@ -290,7 +301,7 @@ dsh web
 pnpm run check
 ```
 
-当前 18 项测试覆盖：
+当前 20 项测试覆盖：
 
 - 小结果 Unicode 边界、ANSI/空白/重复行确定性压缩。
 - medium `4096/1024` 头尾保留。
@@ -298,8 +309,9 @@ pnpm run check
 - 新 archive 实例（模拟重启）后的完整恢复、fork lineage 恢复与无关系 session 拒绝。
 - 并发同一 SPILL_ID 的原子提交，以及损坏 artifact 的哈希拒绝。
 - engine 的默认 62.5% 阈值与 provider 冲突时的原子失败。
-- DSH `0.1.1-rc.2` 的 state/wire projection fold。
+- DSH `0.1.2-rc.1` 的 `SessionProjectionRegistry`、`snapshotEvents()` 与 state/wire projection fold。
 - 真实 `ToolRuntime.execute()` 的正常 accepted result、`retrieve_spill`、持久 archive 读取、downstream value replacement，以及失败结果绝不 spill。
+- scope-routed root pressure listener 与 `tools/ptc-dispatch-log` 的可恢复日志压缩。
 
 建议手工验证：
 

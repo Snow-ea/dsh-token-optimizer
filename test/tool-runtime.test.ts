@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { Context } from '@deepseek-ai/cordis'
+import { scopeTarget } from '@deepseek-ai/dsh-scope'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -117,6 +118,42 @@ test('ToolRuntime compresses a normal accepted result and retrieve restores it',
     assert.match(await reopenedArchive.retrieve('session-test', undefined, spillId), /repeat\nrepeat\nrepeat/)
     assert.equal(runtime.mirrors.length, 1)
     assert.match(runtime.mirrors[0] ?? '', /repeat\nrepeat\nrepeat/)
+  } finally {
+    await runtime.dispose()
+  }
+})
+
+test('PTC dispatch logs are compressed and archived through the scoped waterfall', async () => {
+  const runtime = await createRuntime()
+  try {
+    const original = `head\n\n\n${'dispatch\n'.repeat(100)}tail`
+    const agent = { session: { id: 'session-ptc', header: {} } }
+    const content = [{ type: 'text' as const, text: original }]
+    const shaped = await runtime.policy.waterfall(
+      scopeTarget(runtime.policy.tools, agent),
+      'tools/ptc-dispatch-log',
+      {
+        exec: { agent } as never,
+        agent: agent as never,
+        subCallId: 'call-ptc:code:1' as never,
+        name: 'read',
+        isError: false,
+        content,
+      },
+      async () => content,
+    )
+
+    assert.deepEqual(content, [{ type: 'text', text: original }])
+    assert.equal(shaped[0]?.type, 'text')
+    const text = shaped[0]?.type === 'text' ? shaped[0].text : ''
+    assert.match(text, /SPILL_ID: sha256:[a-f0-9]{64}/)
+    assert.match(text, /\[line repeated x100\]/)
+    const spillId = /SPILL_ID: (sha256:[a-f0-9]{64})/.exec(text)?.[1]
+    assert.ok(spillId)
+
+    const reopenedArchive = new SpillArchive(runtime.archiveRoot)
+    assert.equal(await reopenedArchive.retrieve('session-ptc', undefined, spillId), original)
+    assert.deepEqual(runtime.mirrors, [original])
   } finally {
     await runtime.dispose()
   }

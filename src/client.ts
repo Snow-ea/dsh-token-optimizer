@@ -1,13 +1,14 @@
 import * as React from 'react'
-import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
+import type { Context } from '@deepseek-ai/cordis'
 import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {
   ContextPressureProjection,
   TokenUsageProjection,
 } from '@deepseek-ai/dsh-token-meter/client'
 import type { TokenOptimizerProjection } from './projection.js'
-import type {} from '@deepseek-ai/dsh-client-runtime/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
+import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
+import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import type {} from '@deepseek-ai/dsh-token-meter/client'
 
 export const inject = ['slots'] as const
@@ -154,7 +155,7 @@ function TokenOptimizerDashboard(props: DashboardProps): React.ReactElement {
   )
 }
 
-export function apply(ctx: ClientContext): void {
+export function apply(ctx: Context): void {
   ctx.slots.inject('conversation.composer.dock', () =>
     ctx.slots.register(
       {

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { Context } from '@deepseek-ai/cordis'
+import { agentEvents } from '@deepseek-ai/dsh-agent'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
@@ -45,10 +46,10 @@ test('root engine registers an automatic pressure listener', async () => {
     calls += 1
     return null
   }
-  await root.waterfall(
+  const agent = {} as never
+  await agentEvents(root, agent).waterfall(
     'agent/pre-step',
     {
-      agent: {} as never,
       messages: [],
       turn: 0,
       step: 0,

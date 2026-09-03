@@ -160,6 +160,32 @@ function flattenText(content: readonly ContentBlock[]): string | undefined {
   return text
 }
 
+interface CompressionCandidate {
+  readonly spillId: string
+  readonly text: string
+}
+
+function compressionCandidate(
+  original: string,
+  resolved: ResolvedTokenOptimizerConfig,
+): CompressionCandidate | undefined {
+  const originalChars = countCodePoints(original)
+  if (originalChars < resolved.smallResultChars) return undefined
+
+  const mode: CompressionMode =
+    originalChars >= resolved.largeResultChars ? 'large' : 'medium'
+  const body = mode === 'large'
+    ? previewText(original, resolved.previewChars)
+    : headTailPreview(
+        compressMedium(original),
+        resolved.mediumHeadChars,
+        resolved.mediumTailChars,
+      )
+  const spillId = spillIdFor(original)
+  const replacement = buildCompressionReplacement(mode, original, body, spillId)
+  return replacement === undefined ? undefined : { spillId, text: replacement.text }
+}
+
 function asRetrievedContent(content: string, offset: number, totalChars: number): ContentBlock[] {
   const end = Math.min(totalChars, offset + countCodePoints(content))
   const header = `Retrieved chars ${offset}-${end} of ${totalChars}.`
@@ -269,6 +295,39 @@ export async function apply(ctx: Context, config: TokenOptimizerConfig = {}): Pr
     })
   })
 
+  ctx.on('tools/ptc-dispatch-log', async (dispatch, next) => {
+    const content = await next()
+    if (dispatch.name === RETRIEVE_TOOL_NAME) return content
+
+    const original = flattenText(content)
+    const sessionId = dispatch.agent?.session.id
+    if (original === undefined || sessionId === undefined) return content
+
+    const candidate = compressionCandidate(original, resolved)
+    if (candidate === undefined) return content
+
+    const parentSessionId = dispatch.agent?.session.header.parentSession
+    try {
+      await archive.save(
+        String(sessionId),
+        parentSessionId === undefined ? undefined : String(parentSessionId),
+        candidate.spillId,
+        original,
+      )
+    } catch (error) {
+      ctx.logger.warn(`dsh-token-optimizer: archive save failed; keeping ${dispatch.name} PTC log inline: ${String(error)}`)
+      return content
+    }
+
+    await mirrorToSpillStore(ctx, {
+      owner: { sessionId },
+      source: { toolName: dispatch.name, callId: dispatch.subCallId, label: 'dispatch' },
+      suggestedName: `${dispatch.name}-dispatch.txt`,
+      content: original,
+    })
+    return [{ type: 'text', text: candidate.text }]
+  })
+
   ctx.on('tools/post-execute', async (exec, result, next) => {
     const decision = await next()
     if (
@@ -286,28 +345,15 @@ export async function apply(ctx: Context, config: TokenOptimizerConfig = {}): Pr
     const sessionId = exec.agent?.session.id
     if (original === undefined || sessionId === undefined) return decision
 
-    const originalChars = countCodePoints(original)
-    if (originalChars < resolved.smallResultChars) return decision
-
-    const mode: CompressionMode =
-      originalChars >= resolved.largeResultChars ? 'large' : 'medium'
-    const body = mode === 'large'
-      ? previewText(original, resolved.previewChars)
-      : headTailPreview(
-          compressMedium(original),
-          resolved.mediumHeadChars,
-          resolved.mediumTailChars,
-        )
-    const spillId = spillIdFor(original)
-    const replacement = buildCompressionReplacement(mode, original, body, spillId)
-    if (replacement === undefined) return decision
+    const candidate = compressionCandidate(original, resolved)
+    if (candidate === undefined) return decision
 
     const parentSessionId = exec.agent?.session.header.parentSession
     try {
       await archive.save(
         String(sessionId),
         parentSessionId === undefined ? undefined : String(parentSessionId),
-        spillId,
+        candidate.spillId,
         original,
       )
     } catch (error) {
@@ -324,10 +370,10 @@ export async function apply(ctx: Context, config: TokenOptimizerConfig = {}): Pr
     exec.signal.throwIfAborted()
 
     return decision.additionalContexts === undefined
-      ? { kind: 'accept', content: [{ type: 'text', text: replacement.text }] }
+      ? { kind: 'accept', content: [{ type: 'text', text: candidate.text }] }
       : {
           kind: 'accept',
-          content: [{ type: 'text', text: replacement.text }],
+          content: [{ type: 'text', text: candidate.text }],
           additionalContexts: decision.additionalContexts,
         }
   })
