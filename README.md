@@ -1,6 +1,6 @@
 # dsh-token-optimizer
 
-Deterministic, recoverable tool-result compression and cache-aware compaction for DeepSeek Harness `0.1.2-rc.1`.
+Deterministic, recoverable tool-result compression and cache-aware compaction for DeepSeek Harness `0.1.5-rc.1`.
 
 [中文文档](README.zh.md)
 
@@ -14,15 +14,17 @@ Deterministic, recoverable tool-result compression and cache-aware compaction fo
 
 ## Install
 
-Install the `0.2.0` bundle into a DSH `0.1.2-rc.1` Web profile:
+Install the `0.2.1` bundle into a DSH `0.1.5-rc.1` Web profile:
 
 ```sh
-dsh plugin --profile web add dsh-token-optimizer@0.2.0
+dsh plugin --profile web add dsh-token-optimizer@0.2.1
 ```
 
 Restart the existing `dsh web` process after installation. The bundle enables recoverable tool-result compression, spill retrieval, projection, the Web dashboard, and the 62.5% automatic compaction engine across all four shipped agent modes. No user preset copy is required.
 
-The root engine observes each agent's pressure and overflow lifecycle. In Standard, PTC, and Creator modes it runs before the isolated stock engine, so the surface is reduced at 62.5% and the stock 80% fallback has no second reduction to perform. Minimal mode has no preset compaction group and uses the root engine directly. The optional [`preset-cordis.yml`](preset-cordis.yml) fragment remains for deployments that deliberately want to replace a preset's isolated provider itself; do not edit shipped presets. Existing user-copied presets are not modified automatically and should be revalidated against the DSH `0.1.2-rc.1` composition before reuse.
+The root engine observes each agent's pressure and overflow lifecycle. In Standard, PTC, and Creator modes it runs before the isolated stock engine, so the surface is reduced at 62.5% and the stock 80% fallback has no second reduction to perform. Minimal mode has no preset compaction group and uses the root engine directly. The optional [`preset-cordis.yml`](preset-cordis.yml) fragment remains for deployments that deliberately want to replace a preset's isolated provider itself; do not edit shipped presets. Existing user-copied presets are not modified automatically and should be revalidated against the DSH `0.1.5-rc.1` composition before reuse.
+
+DSH `0.1.5-rc.1` ships its own spill subsystem (`dsh-spill-local` plus `dsh-spill-policy` at `maxInlineBytes: 50000`). The optimizer keeps its durable archive as the retrieval authority and mirrors each replacement into that backend when it is present, so the two coexist without compressing the same result twice.
 
 ## Verify
 
@@ -38,10 +40,15 @@ The current test suite covers deterministic compression, persistent recovery, se
 
 | dsh-token-optimizer | DeepSeek Harness | Status |
 | --- | --- | --- |
-| `0.1.9` | `0.1.1-rc.2` | Previous stable plugin release |
-| `0.2.0` | `0.1.2-rc.1` | Current release |
+| `0.1.9` | `0.1.1-rc.2` | Superseded |
+| `0.2.0` | `0.1.2-rc.1` | Superseded |
+| `0.2.1` | `0.1.5-rc.1` | Current release |
 
-`0.2.0` removes the retired `dsh-client-runtime` dependency, uses the split Conversation/Renderer/Session client graph, folds projections through the on-demand Session log API, and handles PTC durable dispatch logs. See [the compatibility research](docs/dsh-0.1.2-rc.1-compatibility.md). The DSH packages remain optional peer dependencies so the profile runtime supplies the matching services.
+`0.2.0` removed the retired `dsh-client-runtime` dependency, uses the split Conversation/Renderer/Session client graph, folds projections through the on-demand Session log API, and handles PTC durable dispatch logs. See [the 0.1.2-rc.1 compatibility research](docs/dsh-0.1.2-rc.1-compatibility.md).
+
+`0.2.1` adapts to the `SpillSource` discriminated union that `dsh-spill` gained — tool producers must now declare `kind: 'tool'` — and raises every declared DSH range to `0.1.5-rc.1`. No other plugin surface changed between the two releases. See [the 0.1.5-rc.1 compatibility audit](docs/dsh-0.1.5-rc.1-compatibility.md).
+
+The DSH packages remain optional peer dependencies so the profile runtime supplies the matching services.
 
 ## License
 

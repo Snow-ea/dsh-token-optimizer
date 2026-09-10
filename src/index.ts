@@ -321,7 +321,7 @@ export async function apply(ctx: Context, config: TokenOptimizerConfig = {}): Pr
 
     await mirrorToSpillStore(ctx, {
       owner: { sessionId },
-      source: { toolName: dispatch.name, callId: dispatch.subCallId, label: 'dispatch' },
+      source: { kind: 'tool', toolName: dispatch.name, callId: dispatch.subCallId, label: 'dispatch' },
       suggestedName: `${dispatch.name}-dispatch.txt`,
       content: original,
     })
@@ -363,7 +363,7 @@ export async function apply(ctx: Context, config: TokenOptimizerConfig = {}): Pr
 
     await mirrorToSpillStore(ctx, {
       owner: { sessionId },
-      source: { toolName: exec.name, callId: exec.callId, label: 'result' },
+      source: { kind: 'tool', toolName: exec.name, callId: exec.callId, label: 'result' },
       suggestedName: `${exec.name}.txt`,
       content: original,
     })
