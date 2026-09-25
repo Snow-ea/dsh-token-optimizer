@@ -1,6 +1,6 @@
 # dsh-token-optimizer
 
-面向 DeepSeek Harness `0.1.5-rc.1` 的 Cordis 插件包，组合三类能力：
+面向 DeepSeek Harness `0.1.7-rc.2` 的 Cordis 插件包，组合三类能力：
 
 - `tools/post-execute` 上的确定性纯文本结果压缩，以及不改变 PTC 程序值的 `tools/ptc-dispatch-log` 持久日志压缩。
 - 基于官方 `BasicCompactionEngine` 的低阈值、缓存复用 compaction adapter，直接继承新版本的强类型 Session 与图片压力计量。
@@ -114,6 +114,34 @@ Retrieve the complete original with retrieve_spill(...).
 
 `dsh-token-optimizer/engine` 在同一个 Cordis realm 中必须是唯一的 `ctx.compaction` provider。安装 bundle 后，root engine 会跨 agent 监听 pressure/overflow 生命周期；Standard、PTC、创造模式中的隔离 stock engine 只作为 80% 的兜底，root engine 已在 62.5% 先完成压缩，因此不会重复压缩。若在同一个 preset realm 内手工替换 provider，仍不能与 stock `dsh-compaction-basic` 或提供同一服务的 dsh-headroom backend 并列加载。
 
+## 开关：是否启用 62.5% 提前压缩
+
+root engine 是插件自带的提前压缩能力，由 `compaction` 这一个布尔值控制，默认开启：
+
+```yaml
+# 关闭插件自带的 62.5% 提前压缩
+- id: dsh-token-optimizer
+  config:
+    compaction: false
+```
+
+关闭后 root 不再挂载 `ctx.compaction`，也不再注册任何 pressure/overflow listener；工具结果压缩、`retrieve_spill`、session projection 与 Dashboard 全部保留。三点需要注意：
+
+1. **它关掉的是本插件的提前压缩，不是 DSH 的全部压缩。** Standard、PTC、创造模式随附的隔离 stock engine 仍以 80% 兜底，因此关闭后回到的是"未安装本插件时的 DSH 默认"；极简模式没有 compaction group，关闭后才是真正没有压缩。
+2. **配置是整体替换而非深合并。** 在 patch 里写出 `config` 会丢掉未写出的字段（`thresholdRatio`、`retainRatio`、`auto`、四个字符预算、`archiveRoot`）。当前这些字段的内部兜底值与 bundle 完全一致，所以只写 `compaction` 一项是安全的，并有回归测试锁定该等价性；若要同时指定其它项，请一并写全。
+3. **关闭后非 Web profile 不再需要兼容性文档 4.1 节的 overlay。** root engine 不再占用 `ctx.compaction`，headless 这类 profile 可直接启动；反之只要开关打开，overlay 仍然必需，缺失时会以 `service "compaction" has been registered at <BasicCompactionEngine>` 明确失败，而不是静默降级。
+
+阈值本身也可以调整，默认 `0.625`：
+
+```yaml
+- id: dsh-token-optimizer
+  config:
+    thresholdRatio: 0.5
+    retainRatio: 0.16
+```
+
+`retainRatio` 必须小于 `thresholdRatio`，否则原生引擎拒绝加载（报错来自 `BasicCompactionConfig`）。若你只想让引擎保留、但禁止本插件自动触发（手动 `/compact` 仍可用），可以设置 `auto: false`——它是原生字段，日常开关请仍用 `compaction`。
+
 ## Dashboard
 
 Host 注册 `tokenOptimizer` session projection，统计：
@@ -200,17 +228,20 @@ node benchmarks/summarize-session.mjs <session.jsonl.zstd> "BENCHMARK_DONE: HYDR
 | --- | --- | --- |
 | `0.1.9` | `0.1.1-rc.2` | 已被取代 |
 | `0.2.0` | `0.1.2-rc.1` | 已被取代 |
-| `0.2.1` | `0.1.5-rc.1` | 当前正式插件版本 |
+| `0.2.1` | `0.1.5-rc.1` | 已被取代 |
+| `0.2.2` | `0.1.5-rc.1` … `0.1.7-rc.2` | 当前正式插件版本 |
 
 `0.2.0` 不再依赖已退出新 Web 栈的 `@deepseek-ai/dsh-client-runtime`，Client dashboard 改用拆分后的 Conversation、Renderer 和 Session contract；projection 通过 `seq`、`eventAt()`、`snapshotEvents()` 驱动，不读取已移除的 `Session.events`；PTC nested dispatch 的完整程序值保持不变，只压缩 `tools/ptc-dispatch-log` 的持久副本。完整变更依据和验证矩阵见 [`docs/dsh-0.1.2-rc.1-compatibility.md`](docs/dsh-0.1.2-rc.1-compatibility.md)。
 
-`0.2.1` 适配 `dsh-spill` 引入的 `SpillSource` 判别联合——工具类产出方必须声明 `kind: 'tool'`——并把所有声明的 DSH 版本范围提升到 `0.1.5-rc.1`；除此以外两个版本之间的插件接口面没有变化。完整审计见 [`docs/dsh-0.1.5-rc.1-compatibility.md`](docs/dsh-0.1.5-rc.1-compatibility.md)。DSH `0.1.5-rc.1` 自带 `dsh-spill-local` 与 `dsh-spill-policy`（`maxInlineBytes: 50000`），插件保留自己的持久归档作为取回权威，并在后端存在时把每次替换镜像进去，两者不会对同一结果重复压缩。
+`0.2.1` 适配 `dsh-spill` 引入的 `SpillSource` 判别联合——工具类产出方必须声明 `kind: 'tool'`——并把所有声明的 DSH 版本范围提升到 `0.1.5-rc.1`；除此以外两个版本之间的插件接口面没有变化。完整审计见 [`docs/dsh-0.1.5-rc.1-compatibility.md`](docs/dsh-0.1.5-rc.1-compatibility.md)。DSH `0.1.5-rc.1` 自带 `dsh-spill-local` 与 `dsh-spill-policy`（当时的键是 `maxInlineBytes`），插件保留自己的持久归档作为取回权威，并在后端存在时把每次替换镜像进去，两者不会对同一结果重复压缩。
 
-上文基准仍是 `0.1.1-rc.2 + dsh-token-optimizer@0.1.8` 的历史实测数据；在 `0.2.1` 上重跑前，不把它表述为新版本结果。
+`0.2.2` 适配 `0.1.7-rc.2`：跟随 `tool-result` 包装块被移除、采纳 `agent/created` 的异步串行契约、把上游新增的 `headroomTokens` 补齐到自有 schema 并用两条编译期断言锁死漂移，同时按新版本约定声明 Plugin Manager 的本地化标题与图标；`compaction` 开关也随本版发布。它仍支持 `0.1.5-rc.3`，因为宿主的 peer 校验接受 `^0.1.5-rc.1` 覆盖整条 `0.1.x` 线。完整审计见 [`docs/dsh-0.1.7-rc.2-compatibility.md`](docs/dsh-0.1.7-rc.2-compatibility.md)。
+
+上文基准仍是 `0.1.1-rc.2 + dsh-token-optimizer@0.1.8` 的历史实测数据；在 `0.2.2` 上重跑前，不把它表述为新版本结果。
 
 ## 构建
 
-`pnpm-workspace.yaml` 将本工作区开发图锁定到 `0.1.5-rc.1`，并将 Cordis 锁定到 `4.0.2`，使类型检查针对当前 DSH RC 运行时协议。
+`pnpm-workspace.yaml` 将本工作区开发图锁定到 `0.1.7-rc.2`，并将 Cordis 锁定到 `4.0.4`，使类型检查针对当前 DSH RC 运行时协议。
 
 ```powershell
 # 在仓库根目录执行
@@ -235,10 +266,10 @@ Get-Content .\lib\client.js -TotalCount 2
 
 ## 公开安装
 
-使用 DSH `0.1.5-rc.1` 的用户可把 `0.2.1` root bundle 安装到 Web profile：
+使用 DSH `0.1.7-rc.2` 的用户可把 `0.2.2` root bundle 安装到 Web profile：
 
 ```powershell
-dsh plugin --profile web add dsh-token-optimizer@0.2.1
+dsh plugin --profile web add dsh-token-optimizer@0.2.2
 ```
 
 `dsh plugin` 会在目标 profile 目录中转发给 pnpm，并识别包内的 `dsh.bundle.patch`，将 bundle 加入该 profile 的有序层列表。安装后需重启已有的 `dsh web` 进程。
@@ -284,6 +315,8 @@ auto: true
 archiveRoot: !!js dshHomePath('token-optimizer-spill')
 ```
 
+需要关闭这项提前压缩、或改用其它阈值，见下文《开关：是否启用 62.5% 提前压缩》。
+
 root engine 的 pressure/overflow listener 会接收四个内置模式的 agent 事件。Standard、PTC、创造模式仍保留各自 isolated stock engine，但 root engine 先在 62.5% 完成压缩，stock engine 只会在 root engine 没有完成时作为 80% 兜底；极简模式没有 compaction group，直接使用 root engine。因此下载后不需要创建任何新 preset。
 
 如需在一个用户自定义 preset 内彻底替换 isolated `ctx.compaction` provider，仍可使用 [`preset-cordis.yml`](preset-cordis.yml)；这不是内置模式的必需步骤。为保持所有替换内容可恢复，使用该片段时仍要禁用 `tool-result-pruner`：新版 DSH 的内置 pruner 会永久替换 session surface，但不会写入本插件的外部 archive。不要编辑 DSH 随附的 preset。
@@ -296,7 +329,7 @@ root engine 的 pressure/overflow listener 会接收四个内置模式的 agent 
 dsh web
 ```
 
-刷新 `http://127.0.0.1:3080`，新建一个选择任意内置模式的 session，即可直接体验全量 token 优化能力。插件不会自动修改已有用户 preset；从旧 DSH 版本复制的 `Token Optimizer` preset 切换到 `0.1.5-rc.1` 后应先按兼容性文档重新验证。Client HMR 只有 DSH checkout 中的 `pnpm run dev:web` 同时重建 browser bundle 时可用，普通本地包变更仍需要 build、pack、安装和重启。
+刷新 `http://127.0.0.1:3080`，新建一个选择任意内置模式的 session，即可直接体验全量 token 优化能力。插件不会自动修改已有用户 preset；从旧 DSH 版本复制的 `Token Optimizer` preset 切换到 `0.1.7-rc.2` 后应先按兼容性文档重新验证。Client HMR 只有 DSH checkout 中的 `pnpm run dev:web` 同时重建 browser bundle 时可用，普通本地包变更仍需要 build、pack、安装和重启。
 
 ## 测试
 
@@ -312,7 +345,7 @@ pnpm run check
 - 新 archive 实例（模拟重启）后的完整恢复、fork lineage 恢复与无关系 session 拒绝。
 - 并发同一 SPILL_ID 的原子提交，以及损坏 artifact 的哈希拒绝。
 - engine 的默认 62.5% 阈值与 provider 冲突时的原子失败。
-- DSH `0.1.5-rc.1` 的 `SessionProjectionRegistry`、`snapshotEvents()` 与 state/wire projection fold。
+- DSH `0.1.7-rc.2` 的 `SessionProjectionRegistry`、`snapshotEvents()` 与 state/wire projection fold。
 - 真实 `ToolRuntime.execute()` 的正常 accepted result、`retrieve_spill`、持久 archive 读取、downstream value replacement，以及失败结果绝不 spill。
 - scope-routed root pressure listener 与 `tools/ptc-dispatch-log` 的可恢复日志压缩。
 

@@ -23,7 +23,14 @@ export interface TokenOptimizerConfig extends BasicCompactionConfig {
     previewChars?: number;
     /** Persistent root for the plugin-owned, session-authorized spill archive. */
     archiveRoot?: string;
-    /** Disable the engine while keeping the root result policy and retrieve tool. */
+    /**
+     * The one-switch control for this plugin's early compaction. `false` never
+     * mounts the root `ctx.compaction` engine, so no 62.5% pressure or overflow
+     * listener exists, while the tool-result policy, retrieval tool, session
+     * projection, and dashboard stay active; omitted means enabled. Turning it
+     * off reverts the isolated presets to the stock 80% engine DSH ships, so it
+     * disables this plugin's early compaction rather than all compaction.
+     */
     compaction?: boolean;
 }
 export interface ResolvedTokenOptimizerConfig {

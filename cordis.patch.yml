@@ -1,6 +1,8 @@
 # Root-level result policy, retrieval tool, session projection, Web panel, and
 # cross-preset automatic compaction. The root engine observes every agent's
 # pressure event, so shipped preset isolation does not require a user copy.
+# Set `compaction: false` below to drop this early-compaction engine while
+# keeping every other capability; see the README "Configuration" section.
 - insert:
     - id: dsh-token-optimizer
       name: dsh-token-optimizer

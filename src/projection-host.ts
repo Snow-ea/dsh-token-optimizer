@@ -19,9 +19,11 @@ export const tokenOptimizerProjectionSchema = z.object({
 })
 
 function textFromToolResult(event: Extract<SessionEvent, { type: 'tool/result' }>): string | undefined {
-  const result = event.data.message.content[0]
+  // DSH 0.1.7-rc.2 removed the `tool-result` wrapper block from `ContentBlockMap`,
+  // so a `tool/result` message now carries its content blocks directly instead of
+  // nesting them inside a single wrapper block.
   let text = ''
-  for (const block of result.content) {
+  for (const block of event.data.message.content) {
     if (block.type !== 'text') return undefined
     text += block.text
   }

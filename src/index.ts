@@ -1,6 +1,10 @@
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
-import type { BasicCompactionConfig } from '@deepseek-ai/dsh-compaction-basic'
+import type {
+  BasicCompactionConfig,
+  CompactionPolicyConfig,
+  ModelCompactPolicyConfig,
+} from '@deepseek-ai/dsh-compaction-basic'
 import '@deepseek-ai/dsh-agent'
 import '@deepseek-ai/dsh-compaction'
 import '@deepseek-ai/dsh-session'
@@ -40,7 +44,14 @@ export interface TokenOptimizerConfig extends BasicCompactionConfig {
   previewChars?: number
   /** Persistent root for the plugin-owned, session-authorized spill archive. */
   archiveRoot?: string
-  /** Disable the engine while keeping the root result policy and retrieve tool. */
+  /**
+   * The one-switch control for this plugin's early compaction. `false` never
+   * mounts the root `ctx.compaction` engine, so no 62.5% pressure or overflow
+   * listener exists, while the tool-result policy, retrieval tool, session
+   * projection, and dashboard stay active; omitted means enabled. Turning it
+   * off reverts the isolated presets to the stock 80% engine DSH ships, so it
+   * disables this plugin's early compaction rather than all compaction.
+   */
   compaction?: boolean
 }
 
@@ -61,10 +72,19 @@ const DEFAULT_MEDIUM_TAIL_CHARS = 1024
 const DEFAULT_PREVIEW_CHARS = 1000
 const RETRIEVE_TOOL_NAME = 'retrieve_spill'
 
-const modelPolicySchema = z.object({
-  provider: z.string().required(),
-  model: z.string().required(),
+/**
+ * The compaction policy fields this plugin re-declares for its own loader row.
+ *
+ * Upstream owns this vocabulary (`CompactionPolicyConfig` in
+ * `@deepseek-ai/dsh-compaction-basic`), and a schemastery schema cannot spread
+ * another schema, so the plugin restates the fields. The two assertions below
+ * are what keep the restatement honest: without them a field added upstream
+ * would be silently dropped from this plugin's config row, which is exactly how
+ * `headroomTokens` went missing between DSH 0.1.5-rc.1 and 0.1.7-rc.2.
+ */
+const compactionPolicyFields = {
   thresholdRatio: z.number(),
+  headroomTokens: z.number().step(1).min(0),
   retainRatio: z.number(),
   retainTokens: z.number().step(1).min(0),
   summarizationProvider: z.string(),
@@ -72,18 +92,45 @@ const modelPolicySchema = z.object({
   maxTokens: z.number().step(1).min(1),
   compactionRetries: z.number().step(1).min(0),
   maxOverflowRetries: z.number().step(1).min(0),
-})
+}
+
+/** Fields one side declares and the other does not, in either direction. */
+type FieldDrift<Upstream, Declared> =
+  | Exclude<keyof Upstream, keyof Declared>
+  | Exclude<keyof Declared, keyof Upstream>
+
+/** `true` only while the two field sets are identical; otherwise `never`. */
+type NoFieldDrift<Upstream, Declared> = [FieldDrift<Upstream, Declared>] extends [never]
+  ? true
+  : never
+
+/**
+ * Compile-time guards. Each stops compiling the moment this plugin's schema and
+ * upstream's policy vocabulary disagree, in either direction, so an upstream
+ * addition or removal surfaces as a build failure instead of a config row that
+ * quietly ignores what a user wrote.
+ */
+const compactionPolicyFieldsMirrorUpstream: NoFieldDrift<
+  CompactionPolicyConfig,
+  typeof compactionPolicyFields
+> = true
+
+const modelPolicyFields = {
+  provider: z.string().required(),
+  model: z.string().required(),
+  ...compactionPolicyFields,
+}
+
+const modelPolicySchema = z.object(modelPolicyFields)
+
+const modelPolicyFieldsMirrorUpstream: NoFieldDrift<
+  ModelCompactPolicyConfig,
+  typeof modelPolicyFields
+> = true
 
 /** Loader-facing schema. BasicCompactionEngine performs its cross-field checks. */
 export const Config: z<TokenOptimizerConfig> = z.object({
-  thresholdRatio: z.number(),
-  retainRatio: z.number(),
-  retainTokens: z.number().step(1).min(0),
-  summarizationProvider: z.string(),
-  summarizationModel: z.string(),
-  maxTokens: z.number().step(1).min(1),
-  compactionRetries: z.number().step(1).min(0),
-  maxOverflowRetries: z.number().step(1).min(0),
+  ...compactionPolicyFields,
   modelPolicies: z.array(modelPolicySchema),
   auto: z.boolean(),
   smallResultChars: z.number().step(1).min(1).default(DEFAULT_SMALL_RESULT_CHARS),
@@ -94,6 +141,10 @@ export const Config: z<TokenOptimizerConfig> = z.object({
   archiveRoot: z.string(),
   compaction: z.boolean(),
 })
+
+// Referenced so the guards survive tree-shaking review as intentional code.
+void compactionPolicyFieldsMirrorUpstream
+void modelPolicyFieldsMirrorUpstream
 
 function assertSafeInteger(name: string, value: number, minimum: number): void {
   if (!Number.isSafeInteger(value) || value < minimum) {
@@ -143,6 +194,7 @@ function compactionConfigOf(config: TokenOptimizerConfig): BasicCompactionConfig
     ...(config.maxOverflowRetries === undefined
       ? {}
       : { maxOverflowRetries: config.maxOverflowRetries }),
+    ...(config.headroomTokens === undefined ? {} : { headroomTokens: config.headroomTokens }),
     ...(config.modelPolicies === undefined ? {} : { modelPolicies: config.modelPolicies }),
     ...(config.auto === undefined ? {} : { auto: config.auto }),
   }
@@ -285,14 +337,23 @@ export async function apply(ctx: Context, config: TokenOptimizerConfig = {}): Pr
 
   ctx.sessionProjections.register(tokenOptimizerProjectionDefinition)
   ctx.tools.register(buildRetrieveTool(archive))
-  ctx.on('agent/created', ({ agent }) => {
+  // DSH 0.1.7-rc.2 runs `agent/created` listeners serially and holds the first
+  // model request until they settle, and it types the listener as returning
+  // `Promise<undefined> | undefined`. Returning the write instead of dropping it
+  // both satisfies that contract and closes the race where a `retrieve_spill`
+  // in the very first turn could outrun the session's lineage record. Failures
+  // are still swallowed, so a broken archive can never veto agent creation.
+  ctx.on('agent/created', async ({ agent }) => {
     const parentSessionId = agent.session.header.parentSession
-    void archive.recordSession(
-      String(agent.session.id),
-      parentSessionId === undefined ? undefined : String(parentSessionId),
-    ).catch((error) => {
+    try {
+      await archive.recordSession(
+        String(agent.session.id),
+        parentSessionId === undefined ? undefined : String(parentSessionId),
+      )
+    } catch (error) {
       ctx.logger.warn(`dsh-token-optimizer: could not record session lineage: ${String(error)}`)
-    })
+    }
+    return undefined
   })
 
   ctx.on('tools/ptc-dispatch-log', async (dispatch, next) => {

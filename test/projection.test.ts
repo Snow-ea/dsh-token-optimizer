@@ -17,12 +17,16 @@ test('token optimizer projection folds compressed tool results and compaction', 
   const toolEvent = {
     type: 'tool/result',
     data: {
-      message: {
-        content: [{
-          type: 'tool-result',
-          content: [{ type: 'text', text: `body\n\n${notice}` }],
-        }],
-      },
+      turn: 0,
+      step: 0,
+      // Built with the real constructor: DSH 0.1.7-rc.2 dropped the `tool-result`
+      // wrapper block, so a hand-rolled fixture would silently stop matching the
+      // production shape (which is exactly how this test first caught the change).
+      message: createToolResultMessage({
+        callId: ToolCallId('call-fold'),
+        content: [{ type: 'text', text: `body\n\n${notice}` }],
+        isError: false,
+      }),
     },
   } as unknown as SessionEvent
   const compactionEvent = {
