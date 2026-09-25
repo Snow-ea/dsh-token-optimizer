@@ -168,6 +168,8 @@ GitHub 创建/公开仓库并不普遍强制 README、LICENSE、Release/tag、SE
 
 ## 7. 推荐的发布前流程（不在本研究中执行）
 
+> 本节是发布**要求**的静态调研。仓库实际在用的操作手册（人机分工、2FA 处理、发布后强制复核，以及一份踩坑速查表）见 [发布运行手册](release-runbook.zh.md)。
+
 1. 选定唯一 npm 包名与 GitHub 仓库名；明确许可证和所有权。
 2. 确认 `package.json` 含 `dsh.bundle.patch`，且 patch 文件被 `files` 纳入。
 3. 构建后运行测试、`npm pack --dry-run`，在干净目录解包检查内容。
