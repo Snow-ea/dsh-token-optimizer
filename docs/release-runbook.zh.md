@@ -122,9 +122,18 @@ npm pack dsh-token-optimizer@X.Y.Z --pack-destination <临时目录>
 # 比对 sha512（npm view dsh-token-optimizer@X.Y.Z dist.integrity）与本地 release/*.tgz
 ```
 
+再确认发布记录里的 `gitHead` 等于该版本 tag 指向的 commit：
+
+```powershell
+npm view dsh-token-optimizer@X.Y.Z gitHead     # 应等于 git rev-parse vX.Y.Z^{commit}
+```
+
 必要时解包抽查：`lib/index.js`、`lib/projection-host.js` 是否含本次改动的代码，`icon.svg` / `locale/*.json` 是否存在。
 
-> **这条规矩是有代价换来的。** 2026-09-25 发布 0.2.2 时，终端侧反馈"已经推好了"，但复核显示 registry 上根本没有 0.2.2：`dist-tags.latest` 仍是 `0.2.1`、`versions` 列表止于 `0.2.1`、packument 的 `modified` 停在 0.2.1 的发布时间、直接访问 `https://registry.npmjs.org/dsh-token-optimizer/0.2.2` 返回 `404 version not found`。当时实际完成的只有 GitHub 推送。**没有复核就会对外宣称一个并不存在的版本。**
+> **这条规矩是有代价换来的，而且代价是双向的。** 2026-09-25 发布 0.2.2 时把两种误判都踩了一遍：
+>
+> - registry 的 `time` 显示 0.2.2 实际写入于 `15:46:36Z`，而一次复核查询发生在 `15:45:56Z`——**早了 40 秒**。那次查询看到的是 `dist-tags.latest` 仍是 `0.2.1`、`versions` 止于 `0.2.1`、packument 的 `modified` 停在 0.2.1 的发布时间、`/dsh-token-optimizer/0.2.2` 返回 `404 version not found`，于是"查不到"被当成了"没发上去"，差点去走一遍并不需要的补救。
+> - 所以规矩要两条一起用：**结论只能来自 registry 数据，不能来自终端输出**；同时**"刚发完就查不到"默认按"尚未可见"处理**，隔一会儿再查、并核对 `time.modified` 是否已经更新，然后再下结论。假阴性一样会误导人。
 
 ## 5. 已知坑速查
 
@@ -143,4 +152,5 @@ npm pack dsh-token-optimizer@X.Y.Z --pack-destination <临时目录>
 
 - **只是没发上去**：修好鉴权后重跑 §2 第 6 步，`prepublishOnly` 会再验一遍。npm 上不存在该版本时重发是安全的。
 - **发上去了但内容不对**：72 小时内可 `npm unpublish <pkg>@<version>`，之后只能发新补丁版本。所以 §4 的复核要**在对外宣布之前**做完。
-- **GitHub 已推、npm 未发**：这是本次 0.2.2 的状态。tag 已存在，补发 npm 不会造成版本错位；补发后确认 `dist-tags.latest` 与 tag 指向同一份代码即可。
+- **GitHub 已推、npm 未发**：tag 已存在时补发 npm 不会造成版本错位，发布记录里的 `gitHead` 会自动指向那次 commit。补发后按 §4 走一遍，重点核对 `gitHead` 与 tag 一致。
+- **"查不到"先别当失败**：见 §4 的双向教训。先核对 `time.modified` 有没有动；没动再隔一会儿重查一次，然后才考虑补救。对一个其实已经成功的发布做补救，代价比多等一分钟大得多。
