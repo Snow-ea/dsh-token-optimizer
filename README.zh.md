@@ -1,6 +1,6 @@
 # dsh-token-optimizer
 
-面向 DeepSeek Harness `0.1.7-rc.2` 的 Cordis 插件包，组合三类能力：
+面向 DeepSeek Harness `0.2.0-rc.2` 的 Cordis 插件包，组合三类能力：
 
 - `tools/post-execute` 上的确定性纯文本结果压缩，以及不改变 PTC 程序值的 `tools/ptc-dispatch-log` 持久日志压缩。
 - 基于官方 `BasicCompactionEngine` 的低阈值、缓存复用 compaction adapter，直接继承新版本的强类型 Session 与图片压力计量。
@@ -229,7 +229,8 @@ node benchmarks/summarize-session.mjs <session.jsonl.zstd> "BENCHMARK_DONE: HYDR
 | `0.1.9` | `0.1.1-rc.2` | 已被取代 |
 | `0.2.0` | `0.1.2-rc.1` | 已被取代 |
 | `0.2.1` | `0.1.5-rc.1` | 已被取代 |
-| `0.2.2` | `0.1.5-rc.1` … `0.1.7-rc.2` | 当前正式插件版本 |
+| `0.2.2` | `0.1.5-rc.1` … `0.1.7-rc.2` | 已被取代 |
+| `0.2.3` | `0.1.5-rc.1` … `0.2.x` | 当前正式插件版本 |
 
 `0.2.0` 不再依赖已退出新 Web 栈的 `@deepseek-ai/dsh-client-runtime`，Client dashboard 改用拆分后的 Conversation、Renderer 和 Session contract；projection 通过 `seq`、`eventAt()`、`snapshotEvents()` 驱动，不读取已移除的 `Session.events`；PTC nested dispatch 的完整程序值保持不变，只压缩 `tools/ptc-dispatch-log` 的持久副本。完整变更依据和验证矩阵见 [`docs/dsh-0.1.2-rc.1-compatibility.md`](docs/dsh-0.1.2-rc.1-compatibility.md)。
 
@@ -237,11 +238,13 @@ node benchmarks/summarize-session.mjs <session.jsonl.zstd> "BENCHMARK_DONE: HYDR
 
 `0.2.2` 适配 `0.1.7-rc.2`：跟随 `tool-result` 包装块被移除、采纳 `agent/created` 的异步串行契约、把上游新增的 `headroomTokens` 补齐到自有 schema 并用两条编译期断言锁死漂移，同时按新版本约定声明 Plugin Manager 的本地化标题与图标；`compaction` 开关也随本版发布。它仍支持 `0.1.5-rc.3`，因为宿主的 peer 校验接受 `^0.1.5-rc.1` 覆盖整条 `0.1.x` 线。完整审计见 [`docs/dsh-0.1.7-rc.2-compatibility.md`](docs/dsh-0.1.7-rc.2-compatibility.md)。
 
+`0.2.3` 适配 `0.2.0-rc.2`。**没有任何插件接口面的声明以本插件可观测的方式发生变化**：审计的 16 个包里有 14 个的 `.d.ts` 逐字节相同，另外两个（`dsh-session` 的 repair 内部结构、`dsh-client-ui-conversation` 的提交埋点）都在本插件触及范围之外，因此 `0.2.2` 的源码不改一行即可通过编译，24 个测试全部照旧通过。本版之所以必须发布，是因为宿主把 peer 门禁从「静默禁用」改成了**硬拒绝**：声明的范围改为 `>=0.1.5-rc.1 <0.3.0`，既让 bundle 在 `0.2.x` 上继续加载，也仍然覆盖 `0.1.x`。完整审计见 [`docs/dsh-0.2.0-rc.2-compatibility.md`](docs/dsh-0.2.0-rc.2-compatibility.md)。
+
 上文基准仍是 `0.1.1-rc.2 + dsh-token-optimizer@0.1.8` 的历史实测数据；在 `0.2.2` 上重跑前，不把它表述为新版本结果。
 
 ## 构建
 
-`pnpm-workspace.yaml` 将本工作区开发图锁定到 `0.1.7-rc.2`，并将 Cordis 锁定到 `4.0.4`，使类型检查针对当前 DSH RC 运行时协议。
+`pnpm-workspace.yaml` 将本工作区开发图锁定到 `0.2.0-rc.2`，并将 Cordis 锁定到 `4.0.4`，使类型检查针对当前 DSH RC 运行时协议。
 
 ```powershell
 # 在仓库根目录执行
@@ -266,10 +269,10 @@ Get-Content .\lib\client.js -TotalCount 2
 
 ## 公开安装
 
-使用 DSH `0.1.7-rc.2` 的用户可把 `0.2.2` root bundle 安装到 Web profile：
+使用 DSH `0.2.0-rc.2` 的用户可把 `0.2.3` root bundle 安装到 Web profile：
 
 ```powershell
-dsh plugin --profile web add dsh-token-optimizer@0.2.2
+dsh plugin --profile web add dsh-token-optimizer@0.2.3
 ```
 
 `dsh plugin` 会在目标 profile 目录中转发给 pnpm，并识别包内的 `dsh.bundle.patch`，将 bundle 加入该 profile 的有序层列表。安装后需重启已有的 `dsh web` 进程。
@@ -329,7 +332,7 @@ root engine 的 pressure/overflow listener 会接收四个内置模式的 agent 
 dsh web
 ```
 
-刷新 `http://127.0.0.1:3080`，新建一个选择任意内置模式的 session，即可直接体验全量 token 优化能力。插件不会自动修改已有用户 preset；从旧 DSH 版本复制的 `Token Optimizer` preset 切换到 `0.1.7-rc.2` 后应先按兼容性文档重新验证。Client HMR 只有 DSH checkout 中的 `pnpm run dev:web` 同时重建 browser bundle 时可用，普通本地包变更仍需要 build、pack、安装和重启。
+刷新 `http://127.0.0.1:3080`，新建一个选择任意内置模式的 session，即可直接体验全量 token 优化能力。插件不会自动修改已有用户 preset；从旧 DSH 版本复制的 `Token Optimizer` preset 切换到 `0.2.0-rc.2` 后应先按兼容性文档重新验证。Client HMR 只有 DSH checkout 中的 `pnpm run dev:web` 同时重建 browser bundle 时可用，普通本地包变更仍需要 build、pack、安装和重启。
 
 ## 测试
 
@@ -345,7 +348,7 @@ pnpm run check
 - 新 archive 实例（模拟重启）后的完整恢复、fork lineage 恢复与无关系 session 拒绝。
 - 并发同一 SPILL_ID 的原子提交，以及损坏 artifact 的哈希拒绝。
 - engine 的默认 62.5% 阈值与 provider 冲突时的原子失败。
-- DSH `0.1.7-rc.2` 的 `SessionProjectionRegistry`、`snapshotEvents()` 与 state/wire projection fold。
+- DSH `0.2.0-rc.2` 的 `SessionProjectionRegistry`、`snapshotEvents()` 与 state/wire projection fold。
 - 真实 `ToolRuntime.execute()` 的正常 accepted result、`retrieve_spill`、持久 archive 读取、downstream value replacement，以及失败结果绝不 spill。
 - scope-routed root pressure listener 与 `tools/ptc-dispatch-log` 的可恢复日志压缩。
 
