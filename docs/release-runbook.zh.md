@@ -105,6 +105,14 @@ npm.cmd publish
 
 如果此时账号令牌本身已失效，会先看到 `npm whoami` 返回 **401**，那就先 `npm.cmd login`（web 登录）再来。
 
+**OTP 窗口很短时的替代路径（0.2.4 实际采用）**：agent 先在本地跑完等价门禁并 `npm pack` 出 `release/<pkg>.tgz`，人工步骤只发这一条：
+
+```powershell
+npm.cmd publish "D:\deepseek harness\dsh-token-optimizer\release\dsh-token-optimizer-X.Y.Z.tgz"
+```
+
+发布现成 tarball 会跳过 `prepublishOnly`，省掉约 30 秒门禁时间，但 registry 记录里 `gitHead` 为空——复核方式按 §4 的例外条款改用 tarball 字节一致性。
+
 ## 4. 发布后的独立复核（强制，不许省）
 
 **不要从"我跑过门禁"或"终端看着成功了"推论发布成功。** 用 registry 自己的数据确认，三条命令任意一条不过就是没发成功：
@@ -128,12 +136,16 @@ npm pack dsh-token-optimizer@X.Y.Z --pack-destination <临时目录>
 npm view dsh-token-optimizer@X.Y.Z gitHead     # 应等于 git rev-parse vX.Y.Z^{commit}
 ```
 
+> **例外：用 `npm publish <本地 tgz>` 发布现成 tarball 时，`gitHead` 会是空的。** 这条路径会跳过 `prepublishOnly`（适合 OTP 窗口很短、来不及重跑门禁的情况），但 npm 没有 git 上下文，因此不会记录 `gitHead`。此时改用 tarball 字节一致性做权威校验：从 registry 下载回来的包，其 `shasum`、`dist.integrity`、`fileCount` 必须与本地 `npm pack` 产物完全一致（0.2.4 实测：`shasum=107235aa…`、`sha512-XKoErfZ…2kg==`、43 文件 / 209,988 B 解包）。
+
 必要时解包抽查：`lib/index.js`、`lib/projection-host.js` 是否含本次改动的代码，`icon.svg` / `locale/*.json` 是否存在。
 
 > **这条规矩是有代价换来的，而且代价是双向的。** 2026-09-25 发布 0.2.2 时把两种误判都踩了一遍：
 >
 > - registry 的 `time` 显示 0.2.2 实际写入于 `15:46:36Z`，而一次复核查询发生在 `15:45:56Z`——**早了 40 秒**。那次查询看到的是 `dist-tags.latest` 仍是 `0.2.1`、`versions` 止于 `0.2.1`、packument 的 `modified` 停在 0.2.1 的发布时间、`/dsh-token-optimizer/0.2.2` 返回 `404 version not found`，于是"查不到"被当成了"没发上去"，差点去走一遍并不需要的补救。
 > - 所以规矩要两条一起用：**结论只能来自 registry 数据，不能来自终端输出**；同时**"刚发完就查不到"默认按"尚未可见"处理**，隔一会儿再查、并核对 `time.modified` 是否已经更新，然后再下结论。假阴性一样会误导人。
+>
+> 2026-10-17 发布 0.2.4 时又一次踩中同一个假阴性：`npm view dsh-token-optimizer@0.2.4` 在 `15:42:47Z` 返回 `404 No match found`，而 `time` 记录的实际写入时间是 `15:42:48.085Z`——**只早了一秒**。紧接着的 `dist-tags`、`npm pack` 与完整性校验全部通过，证明那次 404 纯属尚未可见。
 
 ## 5. 已知坑速查
 
