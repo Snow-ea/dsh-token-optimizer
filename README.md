@@ -1,6 +1,6 @@
 # dsh-token-optimizer
 
-Deterministic, recoverable tool-result compression and cache-aware compaction for DeepSeek Harness `0.2.0-rc.2`.
+Deterministic, recoverable tool-result compression and cache-aware compaction for DeepSeek Harness `0.2.1-rc.2`.
 
 [中文文档](README.zh.md)
 
@@ -15,19 +15,19 @@ Deterministic, recoverable tool-result compression and cache-aware compaction fo
 
 ## Install
 
-Install the `0.2.3` bundle into a DSH `0.2.0-rc.2` Web profile:
+Install the `0.2.4` bundle into a DSH `0.2.1-rc.2` Web profile:
 
 ```sh
-dsh plugin --profile web add dsh-token-optimizer@0.2.3
+dsh plugin --profile web add dsh-token-optimizer@0.2.4
 ```
 
 Restart the existing `dsh web` process after installation. The bundle enables recoverable tool-result compression, spill retrieval, projection, the Web dashboard, and the 62.5% automatic compaction engine across all four shipped agent modes. No user preset copy is required.
 
-The root engine observes each agent's pressure and overflow lifecycle. In Standard, PTC, and Creator modes it runs before the isolated stock engine, so the surface is reduced at 62.5% and the stock 80% fallback has no second reduction to perform. Minimal mode has no preset compaction group and uses the root engine directly. The optional [`preset-cordis.yml`](preset-cordis.yml) fragment remains for deployments that deliberately want to replace a preset's isolated provider itself; do not edit shipped presets. DSH `0.2.0-rc.2` ships the four presets as extra patch layers inside its Web bundle, so a user-copied preset from an older DSH should be revalidated against the current composition before reuse.
+The root engine observes each agent's pressure and overflow lifecycle. In Standard, PTC, and Creator modes it runs before the isolated stock engine, so the surface is reduced at 62.5% and the stock 80% fallback has no second reduction to perform. Minimal mode has no preset compaction group and uses the root engine directly. The optional [`preset-cordis.yml`](preset-cordis.yml) fragment remains for deployments that deliberately want to replace a preset's isolated provider itself; do not edit shipped presets. DSH `0.2.1-rc.2` ships the four presets as extra patch layers inside its Web bundle, so a user-copied preset from an older DSH should be revalidated against the current composition before reuse.
 
-DSH `0.2.0-rc.2` ships its own spill subsystem (`dsh-spill-local` plus `dsh-spill-policy` at `maxInlineTokens: 12500`). The optimizer keeps its durable archive as the retrieval authority and mirrors each replacement into that backend when it is present, so the two coexist without compressing the same result twice.
+DSH `0.2.1-rc.2` ships its own spill subsystem (`dsh-spill-local` plus `dsh-spill-policy` at `maxInlineTokens: 12500`). The optimizer keeps its durable archive as the retrieval authority and mirrors each replacement into that backend when it is present, so the two coexist without compressing the same result twice.
 
-Since DSH `0.1.7-rc.1` the host checks a plugin's `@deepseek-ai/dsh*` peer ranges at startup. **`0.2.0-rc.2` turned that check from fail-soft into fail-closed:** a bundle whose ranges do not match the runtime is refused outright rather than disabled in place. This plugin declares `>=0.1.5-rc.1 <0.3.0`, so one release covers `0.1.5-rc.3` through `0.2.x` while explicitly refusing the unaudited `0.3.0`. The previous `^0.1.5-rc.1` range could not reach `0.2.0` — a caret on a `0.x` version only authorises patch movement, which is why `0.2.2` is skipped on every `0.2.x` runtime. See [the peer-gate section](docs/dsh-0.2.0-rc.2-compatibility.md#1-the-peer-gate-and-why-022-stops-loading) for the measured matrix.
+Since DSH `0.1.7-rc.1` the host checks a plugin's `@deepseek-ai/dsh*` peer ranges at startup. **`0.2.0-rc.2` turned that check from fail-soft into fail-closed:** a bundle whose ranges do not match the runtime is refused outright rather than disabled in place. This plugin declares `>=0.1.5-rc.1 <0.3.0`, so one release covers `0.1.5-rc.3` through `0.2.x` while explicitly refusing the unaudited `0.3.0`. The previous `^0.1.5-rc.1` range could not reach `0.2.0` — a caret on a `0.x` version only authorises patch movement, which is why `0.2.2` is skipped on every `0.2.x` runtime. `0.2.1-rc.2` adds an optional `engines.dsh` range that would take precedence over the peers when present; this plugin deliberately keeps the peer form, so exactly one requirement surface stays authoritative. See [the 0.2.0-rc.2 peer-gate section](docs/dsh-0.2.0-rc.2-compatibility.md#1-the-peer-gate-and-why-022-stops-loading) and [the 0.2.1-rc.2 gate section](docs/dsh-0.2.1-rc.2-compatibility.md#1-the-peer-gate-in-021-rc2-enginesdsh-joins-peer-arithmetic-is-unchanged) for the measured matrices.
 
 ## Configuration
 
@@ -75,13 +75,16 @@ The current test suite covers deterministic compression, persistent recovery, se
 | `0.2.0` | `0.1.2-rc.1` | Superseded |
 | `0.2.1` | `0.1.5-rc.1` | Superseded |
 | `0.2.2` | `0.1.5-rc.1` … `0.1.7-rc.2` | Superseded |
-| `0.2.3` | `0.1.5-rc.1` … `0.2.x` | Current release |
+| `0.2.3` | `0.1.5-rc.1` … `0.2.x` | Superseded |
+| `0.2.4` | `0.1.5-rc.1` … `0.2.x` | Current release |
 
 `0.2.0` removed the retired `dsh-client-runtime` dependency, uses the split Conversation/Renderer/Session client graph, folds projections through the on-demand Session log API, and handles PTC durable dispatch logs. See [the 0.1.2-rc.1 compatibility research](docs/dsh-0.1.2-rc.1-compatibility.md).
 
 `0.2.1` adapts to the `SpillSource` discriminated union that `dsh-spill` gained — tool producers must now declare `kind: 'tool'` — and raises every declared DSH range to `0.1.5-rc.1`. No other plugin surface changed between the two releases. See [the 0.1.5-rc.1 compatibility audit](docs/dsh-0.1.5-rc.1-compatibility.md).
 
 `0.2.2` adapts to `0.1.7-rc.2`: it follows the removal of the `tool-result` wrapper block, adopts the awaited `agent/created` contract, mirrors the new upstream `headroomTokens` field behind two compile-time drift assertions, and declares plugin metadata for Plugin Manager. The `compaction` switch can also now turn the plugin's early compaction off. It keeps supporting `0.1.5-rc.3`, because the host's peer check accepts `^0.1.5-rc.1` for the whole `0.1.x` line. See [the 0.1.7-rc.2 compatibility audit](docs/dsh-0.1.7-rc.2-compatibility.md).
+
+`0.2.4` adapts to `0.2.1-rc.2`. No plugin-facing declaration changed in a way this plugin can observe, and no source line changed: thirteen of the sixteen audited packages differ at the `.d.ts` level, but every difference is additive, internal, or a doc-comment rewrite, the three core contract packages (`dsh-compaction-basic`, `dsh-session-projection`, `dsh-spill`) are byte-identical, and `cordis` 4.0.5 / `schemastery` 3.18.5 emit identical declarations. The release re-pins the tested closure and certifies compress → archive → retrieve on a real `0.2.1-rc.2` headless session. See [the 0.2.1-rc.2 compatibility audit](docs/dsh-0.2.1-rc.2-compatibility.md).
 
 `0.2.3` adapts to `0.2.0-rc.2`. No plugin-facing declaration changed in a way this plugin can observe — fourteen of the sixteen audited packages are byte-identical at the `.d.ts` level, and the two that moved (`dsh-session`'s repair internals, `dsh-client-ui-conversation`'s submission analytics) are outside its surface, so the `0.2.2` sources compile and all 24 tests pass unchanged. The release exists because the launcher's peer gate became fail-closed: the declared range moves to `>=0.1.5-rc.1 <0.3.0`, which is what keeps the bundle loading on `0.2.x` while still covering `0.1.x`. See [the 0.2.0-rc.2 compatibility audit](docs/dsh-0.2.0-rc.2-compatibility.md).
 
