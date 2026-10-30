@@ -167,8 +167,17 @@ successful retrieve above was not a false positive.
 - [x] Gate matrix with the launcher's own `evaluatePluginCompatibility`: LOAD through `0.2.1-rc.5`, SKIP `0.3.0`.
 - [x] Real `web --dump-config` under the `0.2.1-rc.5` app runtime: zero skip warnings, full optimizer config.
 - [x] Real headless session on `0.2.1-rc.5`: compress -> spill artifact (hash match) -> retrieve -> projection.
-- [ ] `npm publish dsh-token-optimizer@0.2.5` (2FA account: publish is a human step with a TTY).
-- [ ] Install `0.2.5` into the web/desktop profiles after publishing.
+- [x] `npm publish dsh-token-optimizer@0.2.5` - published from commit `e4c4c82` at `2026-10-30T13:29:29Z`;
+  registry `dist-tags.latest` is `0.2.5` and `gitHead` is `e4c4c825b7152b16610807107c272005a1ccebbb`, which
+  equals `git rev-parse v0.2.5^{commit}`. The downloaded registry tarball's SHA-512
+  (`sha512-lL9Os/TwK99gtJm1F/CC7Z9GWAnPb36kfnIXPIjUrHg67mt5WIPLWB7O3J3QGQnE/8+KvFP87TmGWtFk3v57vQ==`)
+  matches `dist.integrity`; it has 44 files and every file except `package.json` is byte-identical to the local
+  `release/dsh-token-optimizer-0.2.5.tgz` (npm strips the publish-only `prepublishOnly` script when it packs a
+  directory, whereas the 0.2.4 tarball was published pre-built and kept it).
+- [x] Installed `0.2.5` into the `web` profile (`dsh plugin --profile web add dsh-token-optimizer@0.2.5`, with
+  the `0.2.1-rc.5` app runtime: the optimizer row still composes with zero skip warnings), and bumped the
+  `desktop` profile dependency to `0.2.5` (the running app keeps `0.2.4` in memory until it restarts; the two
+  releases are code-identical).
 
 ## Source URL index
 
